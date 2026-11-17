@@ -254,3 +254,15 @@ DSPARK + decode Graph 配置的完整 HumanEval 为 158/164（96.3%）。同一
 精确 token 序列在异常位置的 `成品` logprob 从 -6.1613 降至 -25.1250，
 正确缩进的 logprob 从 -0.2863 恢复到约 -1.07e-6。参数遗漏的反例、
 真实 HCU 数值/变输入 Graph 和原配置模型回归共同验证修复；本轮未重跑 GSM8K。
+
+### KDA prefix cache 的 FP32 跟踪快照
+
+Kimi K3.1 day-0 的 `TritonKDAKernel.extend` 声明支持 track snapshot 时，
+必须将 `track_state` 和 `track_chunk_idx` 沿 router、chunk_kda 和 fwd_h
+传到实际设备内核，在指定 chunk 开始时写入 FP32 累加状态。只返回低精度
+逐块 h 不够：上游恢复路径优先消费独立 FP32 buffer；丢参数会读未初始化内存。
+不能将最终状态广播代替中间快照。带 snapshot 的调用应选择具备该合同的
+Triton 分支；不带 snapshot 保留原有 vendor 路由。回归见
+`tests/kernels/test_kda_cache_snapshot.py`，包括真实 extend 入口、独立前缀
+参考、变长批次、非连续状态池、未跟踪行哨兵和 FP32 单次舍入。
+组件通过不代表整模型 cache/thinking/HumanEval 已验收，须另留服务证据。
