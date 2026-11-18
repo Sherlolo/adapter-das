@@ -2064,7 +2064,9 @@ def install() -> None:
 
                 _ll_orig = _dep.Buffer.low_latency_dispatch
                 _ll_params = set(_insp.signature(_ll_orig).parameters)
-                if "use_fp8" not in _ll_params and "quant_type" in _ll_params:
+                if ("use_fp8" not in _ll_params and "quant_type" in _ll_params
+                        and not getattr(_ll_orig, "_hcu_dual_dispatch_api", False)):
+                    import functools as _functools
                     import sys as _sys
 
                     def _ll_dispatch_v0521(
@@ -2144,7 +2146,19 @@ def install() -> None:
                             **({"x_scales": x_scales} if x_scales is not None else {}),
                         )
 
-                    _dep.Buffer.low_latency_dispatch = _ll_dispatch_v0521
+                    @_functools.wraps(_ll_orig)
+                    def _ll_dispatch_dual(self, x, topk_idx, *args, **kwargs):
+                        if (len(args) >= 3 or "quant_type" in kwargs
+                                or "topk_weight" in kwargs):
+                            return _ll_orig(self, x, topk_idx, *args, **kwargs)
+                        if kwargs.get("topk_weights") is None:
+                            caller_weights = _sys._getframe(1).f_locals.get("topk_weights")
+                            if isinstance(caller_weights, torch.Tensor):
+                                kwargs["topk_weights"] = caller_weights
+                        return _ll_dispatch_v0521(self, x, topk_idx, *args, **kwargs)
+
+                    _ll_dispatch_dual._hcu_dual_dispatch_api = True
+                    _dep.Buffer.low_latency_dispatch = _ll_dispatch_dual
                     logging.getLogger("hcu.adapter").info(
                         "HCU deep_ep bridge: v0.5.21 low_latency_dispatch call "
                         "shape -> DTK fork (quant_type) translated"
