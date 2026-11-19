@@ -105,17 +105,25 @@ def _install_function(entry):
 
 def install():
     from hcu_adapter import registry
-    try:
-        from sglang.srt.utils.device import maybe_reindex_device_id
-        target = "sglang.srt.utils.device:maybe_reindex_device_id"
-    except ImportError:
-        from sglang.srt.utils.common import maybe_reindex_device_id
-        target = "sglang.srt.utils.common:maybe_reindex_device_id"
+    from sglang.srt import utils
+    maybe_reindex_device_id = getattr(utils, "maybe_reindex_device_id", None)
+    if maybe_reindex_device_id is None:
+        from importlib import import_module
+        module_name = "sglang.srt.utils.device"
+        try:
+            device = import_module(module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name != module_name:
+                raise
+            device = None
+        maybe_reindex_device_id = getattr(device, "maybe_reindex_device_id", None)
+        if maybe_reindex_device_id is None:
+            from sglang.srt.utils.common import maybe_reindex_device_id
 
     _install_function(maybe_reindex_device_id)
     registry.register(
         "platform_detect", _device_context,
-        target=target,
+        target=f"{maybe_reindex_device_id.__module__}:maybe_reindex_device_id",
         mechanism=registry.MECH_REBIND,
         detail="parent-scoped spawn hint; logical GPU selected before bootstrap",
     )

@@ -118,10 +118,14 @@ def _replace_version_gates(common, pkg):
     names = []
     for name in list(vars(common)):
         inner = getattr(getattr(common, name), "__wrapped__", None)
-        direct = (callable(inner) and hasattr(inner, "__code__")
-                  and "_check_cuda_device_version" in inner.__code__.co_names
-                  and inner.__globals__.get("_check_cuda_device_version") is check)
-        if (isinstance(inner, _ft.partial) and inner.func is check) or direct:
+        partial_gate = isinstance(inner, _ft.partial) and inner.func is check
+        function_gate = (
+            callable(inner)
+            and hasattr(inner, "__code__")
+            and "_check_cuda_device_version" in inner.__code__.co_names
+            and inner.__globals__.get("_check_cuda_device_version") is check
+        )
+        if partial_gate or function_gate:
             setattr(common, name, _false)
             names.append(name)
     if pkg is not None:

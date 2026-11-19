@@ -180,3 +180,33 @@ def test_invalid_and_stale_hints_fail_before_any_gpu_selection(monkeypatch, hint
         subject.select_inherited_device()
     assert not devices
     assert subject._DEVICE_ENV not in os.environ
+
+
+@pytest.mark.parametrize("location", ["package", "device", "common"])
+def test_install_resolves_public_export_and_legacy_paths(monkeypatch, location):
+    from hcu_adapter import registry
+    packages = {}
+    for name in ("sglang", "sglang.srt", "sglang.srt.utils"):
+        module = types.ModuleType(name)
+        module.__path__ = []
+        packages[name] = module
+        monkeypatch.setitem(sys.modules, name, module)
+    packages["sglang"].srt = packages["sglang.srt"]
+    packages["sglang.srt"].utils = packages["sglang.srt.utils"]
+    helper, _ = entry()
+    owner = "sglang.srt.utils" if location == "package" else "sglang.srt.utils." + location
+    helper.__module__ = owner
+    if location == "package":
+        packages[owner].maybe_reindex_device_id = helper
+    else:
+        module = types.ModuleType(owner)
+        module.maybe_reindex_device_id = helper
+        monkeypatch.setitem(sys.modules, owner, module)
+    if location == "common":
+        monkeypatch.delitem(sys.modules, "sglang.srt.utils.device", raising=False)
+    seen = []
+    monkeypatch.setattr(registry, "register", lambda *a, **kw: seen.append(kw))
+    subject.install()
+    assert seen[0]["target"] == owner + ":maybe_reindex_device_id"
+    with helper(2) as device:
+        assert device == 2
