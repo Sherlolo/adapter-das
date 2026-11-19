@@ -4,8 +4,8 @@ The DTK deepgemm wheel lacks the trio, so deep_gemm_dtk installs the
 dsa_mqa_logits_emu provider. Its blob must satisfy every consumer of the
 same symbol:
 
-1. FALLBACK  — without lightop: [rows + 1, 2] int32 zeros on the input
-               device (torch/triton tiers ignore it).
+1. FALLBACK  — without lightop, or for empty idle-DP batches: [rows + 1, 2]
+               int32 zeros on the input device (torch/triton tiers ignore it).
 2. PLANNER   — with lightop: the lightop split-KV planner's own output,
                fed int32 contiguous 1-D lens (its paged_mqa_logits asserts
                a genuine plan; a zero blob made decode graph capture fail
@@ -63,6 +63,31 @@ def test_planner_receives_flat_int32_lens():
     assert seen["lens"].dtype == torch.int32 and seen["lens"].dim() == 1
     assert seen["lens"].is_contiguous() and seen["lens"].tolist() == [5, 9]
     assert (seen["block_kv"], seen["num_sms"]) == (64, 16)
+
+
+def test_idle_dp_rank_skips_lightop_planner():
+    calls = []
+
+    def planner(lens, block_kv, num_sms):
+        calls.append(lens.numel())
+        if lens.numel() == 0:
+            raise RuntimeError("unsupported aligned batch size")
+        return torch.ones((num_sms + 1, 2), dtype=torch.int32)
+
+    saved = _with_planner(planner)
+    try:
+        empty = M.get_paged_mqa_logits_metadata(
+            torch.empty((0, 1), dtype=torch.int32), 64, 16
+        )
+        nonempty = M.get_paged_mqa_logits_metadata(
+            torch.tensor([[5]], dtype=torch.int32), 64, 16
+        )
+    finally:
+        M._LIGHTOP_META[:] = saved
+    assert empty.shape == (1, 2) and empty.dtype == torch.int32
+    assert not empty.any()
+    assert calls == [1]
+    assert nonempty.shape == (17, 2)
 
 
 @requires_lightop_gpu

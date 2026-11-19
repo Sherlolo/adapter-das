@@ -88,6 +88,28 @@ def test_missing_check_is_a_noop():
     assert common.is_sm90_supported() is True
 
 
+def test_function_body_gates_replaced_with_frozen_aliases():
+    common = types.ModuleType("fake_utils_device")
+    exec(
+        "from functools import lru_cache\n"
+        "def _check_cuda_device_version(**kwargs):\n"
+        "    raise AttributeError('HIP has no torch.version.cuda')\n"
+        "@lru_cache(maxsize=1)\n"
+        "def is_sm90_supported():\n"
+        "    return _check_cuda_device_version(majors=[9])\n"
+        "is_hopper = is_sm90_supported\n",
+        vars(common),
+    )
+    pkg = types.ModuleType("fake_utils")
+    pkg.is_sm90_supported = common.is_sm90_supported
+    pkg.is_hopper = common.is_hopper
+    gates = platform_seam._replace_version_gates(common, pkg)
+    assert set(gates) == {"is_sm90_supported", "is_hopper"}
+    assert common.is_sm90_supported() is False
+    assert pkg.is_sm90_supported() is False
+    assert pkg.is_hopper() is False
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

@@ -352,10 +352,14 @@ def get_paged_mqa_logits_metadata(context_lens, block_kv, num_sms):
     Contract (DeepGEMM): an int32 [*, 2] split-KV plan sized by num_sms that
     only the paged-MQA kernel reads back. The torch/triton tiers here ignore it, but
     any lightop ``paged_mqa_logits`` consumer asserts a genuine plan, so the
-    lightop planner is the producer whenever it is installed; the zero blob
-    is kept only for boxes without lightop.
+    lightop planner is the producer for nonempty rows whenever it is installed.
+    Empty idle-DP batches have no MQA work and use a one-row zero blob because
+    the lightop planner rejects aligned batch zero.
     """
     rows = context_lens.reshape(-1)
+    if rows.numel() == 0:
+        # Idle DP ranks have no MQA work; LightOp rejects aligned batch zero.
+        return torch.zeros((1, 2), dtype=torch.int32, device=rows.device)
     planner = _lightop_metadata_fn()
     if planner is not None:
         _count("mqa.paged_metadata.native")
