@@ -164,6 +164,21 @@ def test_identity_changes_for_input_and_transformation(source, tmp_path, monkeyp
     assert second != third
 
 
+def test_paged_mqa_metadata_accepts_runtime_gpu_device(source, tmp_path):
+    root, _ = source
+    relative = "csrc/deepseek_v4/paged_mqa_metadata.cuh"
+    path = root / relative
+    original = path.read_text()
+    if "device.set_options<" not in original:
+        path.write_text(original + "\n    device.set_options<kDLCUDA>();\n")
+    before = _snapshot(root)
+    bundle, _ = bridge.prepare(root, tmp_path / "cache")
+    transformed = (bundle / relative).read_text()
+    assert "device.set_options<kDLGPU>();" in transformed
+    assert "device.set_options<kDLCUDA>();" not in transformed
+    assert _snapshot(root) == before
+
+
 def test_corrupt_bundle_refused_without_repairing_sources(source, tmp_path):
     root, _ = source
     bundle, _ = bridge.prepare(root, tmp_path / "cache")
@@ -502,8 +517,12 @@ def _functions(root, tree):
         "resolve_sources": resolver, "DEFAULT_INCLUDE": [str(root / "include")],
         "BuildSpec": lambda **kw: types.SimpleNamespace(**kw),
         "is_hip_runtime": lambda: True,
-        "envs": types.SimpleNamespace(SGLANG_JIT_LOG_RESOURCE_USAGE=false_env),
-        "REGISTERED_DEPENDENCIES": {}, "get_default_target_flags": lambda: [],
+        "is_sail_runtime": lambda: False,
+        "envs": types.SimpleNamespace(SGLANG_JIT_LOG_RESOURCE_USAGE=false_env,
+                                     SGLANG_JIT_ENABLE_LINEINFO=false_env,
+                                     SGLANG_JIT_DEBUG_TRACE=false_env),
+        "REGISTERED_DEPENDENCIES": {}, "get_default_target_flags": lambda *args: [],
+        "get_compile_arch": lambda name: "gfx938",
         "DEFAULT_CFLAGS": [], "DEFAULT_LDFLAGS": [],
         "ninja": types.SimpleNamespace(generate=generate),
     }
@@ -780,3 +799,20 @@ def test_gpu_original_quant_compilation_and_variable_graph_replay(group_size, ba
         torch.testing.assert_close(dequant, want, atol=magnitude * .02, rtol=.13)
         assert torch.nn.functional.cosine_similarity(dequant, want, dim=0) >= .9999
         assert torch.nn.functional.cosine_similarity(dequant, groups.flatten(), dim=0) >= .999
+
+
+def test_topk_refine_uint2_bindings_transform_both_sites_without_source_writes(tmp_path):
+    from hcu_adapter import jit_dpskmeta
+
+    root = tmp_path / 'community' / 'jit'
+    root.mkdir(parents=True)
+    _synthetic(root)
+    path = root / 'include/sgl_kernel/deepseek_v4/topk_impl.cuh'
+    needle, replacement = jit_dpskmeta._PATCHES_INCLUDE['sgl_kernel/deepseek_v4/topk_impl.cuh'][0]
+    path.write_text(path.read_text().replace(needle, needle + '\n' + needle))
+    before = _snapshot(root)
+    bundle, _ = bridge.prepare(root, tmp_path / 'cache')
+    transformed = (bundle / 'include/sgl_kernel/deepseek_v4/topk_impl.cuh').read_text()
+    assert transformed.count(replacement) == 2
+    assert needle not in transformed
+    assert _snapshot(root) == before

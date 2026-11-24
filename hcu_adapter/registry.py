@@ -198,6 +198,7 @@ TEXT_PATCH_ALLOWLIST = {
     # per the tree's own lora JIT convention) — DSV4-Flash decode graph
     # capture, validation-host-16 gfx938 2026-10-20. See hcu_adapter/jit_dpskmeta.py.
     ("platform_detect", "#include <cub/block/block_scan.cuh>"),
+    ("platform_detect", "    device.set_options<kDLCUDA>();"),
     # same file, Phase-1/2 hand scans: mask-form shuffles undeclared on DTK;
     # width=32 HIP forms keep the exact CUDA 32-lane warp segmentation.
     ("platform_detect", "uint32_t y = __shfl_up_sync(0xffffffff, v, o);"),
@@ -347,6 +348,7 @@ TEXT_PATCH_ALLOWLIST = {
     # --- 6sp/8sp coarse pairs are the §5.3 ① dual candidates. The situ
     # --- cast pair reuses the silu_and_mul entries above (identical text).
     ("platform_detect", "  const auto [v_lo, v_hi] = to_fp32(keys);"),
+    ("platform_detect", "    const auto [key_lo, key_bits] = refine_key_range(v_lo, v_hi);"),
     (
         "platform_detect",
         "  const auto [u_lo, u_hi] = to_fp32(keys - 0x00010001u);",

@@ -46,7 +46,7 @@ _SCORING_MOD = "sglang.srt.layers.attention.dsv4.v41_indexer.scoring"
 def _wrap_paged_v2(orig):
     def topk_transform_paged_v2(
         scores, seq_lens, page_tables, out_page_indices, page_size, metadata,
-        out_raw_indices=None,
+        out_raw_indices=None, **kwargs,
     ):
         if scores.dim() == 2 and scores.stride(0) % 4 != 0:
             scores = torch.nn.functional.pad(
@@ -54,7 +54,7 @@ def _wrap_paged_v2(orig):
             )
         return orig(
             scores, seq_lens, page_tables, out_page_indices, page_size,
-            metadata, out_raw_indices,
+            metadata, out_raw_indices, **kwargs,
         )
 
     topk_transform_paged_v2._hcu_topk_v2 = True

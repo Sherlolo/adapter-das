@@ -75,6 +75,7 @@ DeepInfer 的具体文件位置见[算子导航](frameworks/deepinfer-kernels.md
 | docs/sglang-spawn-device.md | SGLang scheduler GPU selection before adapter bootstrap; spawn hint and alias contracts | Launch context or interpreter startup order changes |
 | docs/bootstrap.md | 新容器 Bootstrap 手册：依赖套件版本钉、tvm-ffi 手工预热、镜像差异表、四条自检 | 镜像换代后版本钉失效（快照与镜像不符） |
 | docs/models.md | 模型验证记录表（一天一行，判定四门）+ 组合特性清单 | 新模型跑完未加行 |
+| docs/kimi31-cp8-metadata.md | Kimi31 CP8 分页 MQA metadata 的 DLPack 设备约束、私有 JIT 输入修复与实卡验证边界 | metadata 入口或 SymbolicDevice 约束发生变化 |
 | docs/tier-matrix.md | 算子档位矩阵（自动生成）：每算子有哪些档、缺哪档、什么状态——实现排期的直接输入 | 与 BACKEND_CATALOG 不一致（L0 `impl-naming` freshness 会抓） |
 | docs/vendor-kernels.md | DTK vendor 算子库 API 梳理（aiter/lightop/boltops/flash_mla/flash_attn/deepgemm/kda/tokenspeed，实机内省+热点映射机会表） | wheel 换代后 API 面/版本后缀失效 |
 | skills/hcu-adapter-dev/SKILL.md | 开发规约入口 + 任务路由（references/ 下五份专篇） | 黄金法则与代码内守卫不符 |
@@ -142,3 +143,20 @@ moe_align capture 崩（527ad97）。金索引法：docs/models.md 备注列 + c
 
 
 vLLM 0.33 mHC 行为适配候选：`docs/frameworks/vllm033-mhc.md`；数学委托官方 Torch，公开 OOT 注册归宿主桥，post/head 保留，完整四维及模型门禁未闭合。
+
+
+## Kimi K3.1 DCP 的 top-k v2 编译输入（2026-11-23）
+
+在 SGLang `6321f714` 的 `include/sgl_kernel/deepseek_v4/topk_impl.cuh` 中，
+`refine_key_range` 的两处 `uint2` 结构化绑定不能被目标 DTK 编译。
+`jit_dpskmeta` 在 adapter 的不可变编译输入缓存中将其改为 `.x/.y` 访问；
+社区源码保持原样，登记沿用 `platform_detect` 的编译输入白名单。
+该规则在旧树缺少整个绑定表达式时跳过，表达式仍在但形态漂移时拒绝。
+实际 gfx938 上 top-k v2 的 mode2 编译及 DCP 候选 epilogue 数值对照已通过；
+完整服务、所有 shape 与 graph 覆盖以当前任务的独立验收记录为准。
+回归位于 `tests/adapter/test_jit_sources.py` 的 refine uint2 用例，
+验证两处转换及源树字节不变；开发入口仍为 hcu-adapter-dev。
+
+DCP 的 paged top-k v2 调用现包含 `deterministic=True`；stride-padding 包装
+保留所有额外关键字并透传，未传关键字的旧调用保持原调用形式。
+回归覆盖 stride 尾部负无穷填充、raw-index对象身份、确定性选项和旧签名。

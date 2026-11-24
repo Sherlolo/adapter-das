@@ -160,6 +160,8 @@ _SELF_HEAL_ABSENT = {
             "const auto [v_lo, v_hi] = impl::coarse_bin_bounds<kHistBits>(threshold_bin);",
     },
     "sgl_kernel/deepseek_v4/topk_impl.cuh": {
+        "\n    const auto [key_lo, key_bits] = refine_key_range(v_lo, v_hi);":
+            "const auto [key_lo, key_bits] = refine_key_range(",
         "\n  const auto [v_lo, v_hi] = to_fp32(keys);":
             "const auto [v_lo, v_hi] = to_fp32(",
         "\n  const auto [u_lo, u_hi] = to_fp32(keys - 0x00010001u);":
@@ -183,6 +185,10 @@ _PATCHES = {
         ),
     ],
     "deepseek_v4/paged_mqa_metadata.cuh": [
+        (
+            "    device.set_options<kDLCUDA>();",
+            "    device.set_options<kDLGPU>();",
+        ),
         (
             "#include <cub/block/block_scan.cuh>",
             "#include <hipcub/hipcub.hpp>  // HCU: DTK has hipCUB (rocPRIM backend)\n"
@@ -547,6 +553,11 @@ _PATCHES = {
 #   根相对路径,_SELF_HEAL_ABSENT 同键,天然免与 csrc 键撞车。
 _PATCHES_INCLUDE = {
     "sgl_kernel/deepseek_v4/topk_impl.cuh": [
+        (
+            "\n    const auto [key_lo, key_bits] = refine_key_range(v_lo, v_hi);",
+            "\n    const uint2 _rk = refine_key_range(v_lo, v_hi);\n"
+            "    const auto key_lo = _rk.x, key_bits = _rk.y;",
+        ),
         # "\n"-anchored needles: 6sp/8sp same-expression sites stay
         # indent-exact so the shallower needle cannot tail-match a deeper
         # occurrence (see module docstring).
