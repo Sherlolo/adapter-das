@@ -92,6 +92,19 @@ class _FlashInferFinder(LibStubFinder):
         )
 
 
+def top_p_renorm_probs(probs, top_p, *, is_deterministic=False):
+    from sglang.kernels.ops.sampling.renorm_triton import top_p_renorm_probs_triton
+
+    # The HIP kernel uses a fixed-order reduction for both dispatch policies.
+    return top_p_renorm_probs_triton(probs, top_p)
+
+
+def top_k_renorm_probs(probs, top_k, *, is_deterministic=False):
+    from sglang.kernels.ops.sampling.renorm_triton import top_k_renorm_probs_triton
+
+    return top_k_renorm_probs_triton(probs, top_k)
+
+
 def register() -> None:
     if not is_registered(_FlashInferFinder, "flashinfer"):
         import sys
@@ -132,6 +145,8 @@ def register() -> None:
                 "min_p_sampling_from_probs": min_p_sampling_from_probs,
                 "softmax": softmax,
                 "top_k_top_p_sampling_from_probs": top_k_top_p_sampling_from_probs,
+                "top_p_renorm_probs": top_p_renorm_probs,
+                "top_k_renorm_probs": top_k_renorm_probs,
             },
         }
         _f = next(
