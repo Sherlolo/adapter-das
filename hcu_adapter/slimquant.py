@@ -116,6 +116,9 @@ class _SlimquantShard:
 
     @staticmethod
     def _keep(name):
+        from .slimquant_native import native_dense_tensor
+        if native_dense_tensor(name):
+            return True
         # Non-expert weights are dequantized to bf16 below, so their scales
         # must not reach the loader (UnquantizedLinearMethod registers no
         # weight_scale param, and the stacked-name rewrite would KeyError).
@@ -137,6 +140,9 @@ class _SlimquantShard:
         if not self._active:
             return self._f.get_tensor(name)
         f = self._f
+        from .slimquant_native import native_dense_tensor
+        if native_dense_tensor(name):
+            return f.get_tensor(name)
         if name.endswith(".weight_scale"):
             base = name[: -len("_scale")]
             if _ROUTED_EXPERT_RE.search(base):

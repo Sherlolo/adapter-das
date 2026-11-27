@@ -534,6 +534,10 @@ REGISTRY = {
         "about": "DSA page_size 覆盖（CLI --page-size 等效，须为 index_kpool 倍数）",
     },
     # quantization
+    "HCU_KIMI31_NATIVE_DENSE_INT8": {
+        "env": "HCU_KIMI31_NATIVE_DENSE_INT8", "default": "0",
+        "about": "Opt-in native ModelSlim dense INT8 weight/scale passthrough; requires Day0 plugin and explicit checkpoint w8a8_include metadata. Dense scales are unchanged; expert packing remains unchanged.",
+    },
     "HCU_SLIMQUANT": {
         "env": "HCU_SLIMQUANT", "default": "1",
         "about": "slimquant_w4a8 方法注册（按 checkpoint 配置自选）；=0 关闭",

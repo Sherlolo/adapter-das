@@ -310,3 +310,16 @@ Graph rows without changing the selected graph mode. See
 Unset these variables (or set `0`) to retain the existing dispatch paths.
 See [Kimi prefill delivery](kimi31-prefill-delivery.md) for the measured shapes,
 fixed upstream revision and validation boundaries.
+
+## Kimi K3.1 native dense INT8 candidate
+
+`HCU_KIMI31_NATIVE_DENSE_INT8` set to `1` requires `HCU_KIMI31_DAY0=1`, the HCU
+plugin, and `HCU_KIMI31_MODELSLIM_CHECKPOINT` pointing to a checkpoint with
+explicit `compression_config.mixed_precision.w8a8_include` INT8 per-channel
+metadata. Only allowlisted dense weights and their scales bypass BF16
+dequantization; fused projections require every component to be allowlisted.
+The plugin selects its native SlimQuant INT8 Linear method for the same names.
+Dense scales retain their stored values, whereas routed INT4 expert scales
+retain the existing plugin scale/16 contract. Default `0` keeps BF16 loading.
+CPU name/metadata contracts are tested; HCU numerical, Graph and serving
+validation remain required before treating this candidate as verified.
